@@ -1,5 +1,6 @@
 import requests
 from decouple import config
+from openai import OpenAI
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,27 +18,19 @@ class InterpretationView(APIView):
 
         content = serializer.validated_data.get('content')
 
-        url = config('INTERPRETATION_URL')
+        client = OpenAI(
+            api_key=config('OPENAPI_SECRET_KEY'),
+            organization=config('OPENAPI_ORG_ID'),
+        )
 
-        body = {
-            "dreamContent": content,
-            "methodology": "freud",
-            "isPublic": True
-        }
+        stream = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": content}],
+            stream=True,
+        )
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                return Response(chunk.choices[0].delta.content)
 
-        try:
-            response = requests.post(url, json=body, timeout=10)
-        except requests.exceptions.RequestException:
-            return Response({
-                "message": "مشکلی در ارسال درخواست شما بوجود آمده لطفا چند دقیقه دیگر دوباره امتحان کنید"
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            json_resp = response.json()
-        except ValueError:
-            return Response({
-                "message": "مشکلی در دریافت اطلاعات بوجود آمده لطفا دوباره امتحان کنید"
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(json_resp)
+        return Response(False)
 
